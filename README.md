@@ -36,12 +36,12 @@
     - CST
 - Enable sshd (20%)
     - Install this public key to your /home/judge/.ssh/ for Online Judge.
-        ```
+        ```sh
         $ fetch https://nasa.cs.nctu.edu.tw/sa/2023/nasakey.pub
         $ cat nasakey.pub >> /home/judge/.ssh/authorized_ke
         ```
     - You can use Fingerprint to check "nasakey.pub"
-        ```
+        ```sh
         $ ssh-keygen -l -f nasakey.pub
         256 SHA256:0LO0tdbs1Q5q4J8wa4Hidej2gkq9gqtLQeJwm98VYZk sa-2023 (ED25519)
         ```
