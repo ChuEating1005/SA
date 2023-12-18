@@ -1,4 +1,4 @@
-#!/bin/sh
+:#!/bin/sh
 # shellcheck disable=SC2046,SC3037,SC2086,SC2004,SC2027
 
 helpFunction()
