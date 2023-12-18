@@ -1,0 +1,17 @@
+#!/bin/sh
+
+public_dir=/home/sftp/public
+hidden_dir=/home/sftp/hidden/.exe
+log_file=var/log/sftp_watchd.log
+
+while true; do
+	for file in /home/sftp/public/*.exe; do
+		echo "$file"
+		if [ -f  "$file" ] ; then
+			echo "gotcha"
+			user=$(stat -f "%Su" "$file")
+			mv "$file" /home/sftp/hidden/.exe
+			logger -p local1.warning "$file violate file detected. Uploaded by ${user}."
+		fi
+	done
+done

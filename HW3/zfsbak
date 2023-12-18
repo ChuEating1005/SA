@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+function zfsbak_Usage(){
+	echo "Usage:"
+    echo "- create: zfsbak DATASET [ROTATION_CNT]"
+    echo "- list: zfsbak -l|--list [DATASET|ID|DATASET ID...]"
+    echo "- delete: zfsbak -d|--delete [DATASET|ID|DATASET ID...]"
+    echo "- export: zfsbak -e|--export DATASET [ID]"
+   	echo "- import: zfsbak -i|--import FILENAME DATASET"
+}
+
+function updateDate(){
+	curDate="$(date '+%Y-%m-%d-%H:%M:%S')"
+}
+Transform="transform"
+function transform(){
+	args=($(echo "${1:-}" | tr ' ' '\n')) # arguments
+
+	input=$(cat | grep '@zfsbak_' | sed 's/@zfsbak_/@/g' | sort -t@ -k2,2 -k1,1) # from stdinput
+
+	S=''
+
+	lines=() # output log
+	header="ID\tDATASET\t\tTIME"
+
+	id=1
+
+	for line in $input; do
+		prefix=${line%/*} # remove all character after the last '/'
+		timestamp=${line#*@} # remove all character before the first '@'
+		name=${line%@*} # remove all character after the last '@'
+		if [[ "$S" != *"|$prefix@$timestamp|"* ]]; then
+			lines+=("${id}\t${name}\t\t${timestamp}")
+			id=$((id+1))
+		fi
+		S="$S |$line|"
+	done
+
+	echo -e $header
+	if [ -z "$args" ]; then
+		for x in ${lines[@]}; do
+			echo -e $x
+		done
+	else
+		for x in ${args[@]}; do
+			echo -e ${lines[$((x-1))]}
+		done
+
+	fi
+}
+
+function snapshot_Create(){
+    local dataset=$1
+    local rotation_cnt=${2:-12} # Default rotation cnt = 12
+
+    # Create snapshot with dataset name and date
+    zfs snapshot -r "${dataset}@zfsbak_${curDate}"
+	echo "Snap "${dataset}@zfsbak_${curDate}""
+
+
+    # Rotate snapshots
+    snapshots=($(zfs list -H -t snapshot -o name -r "${dataset}" | grep "^${dataset}@zfsbak_" | sort -r))
+    for ((i = rotation_cnt; i < ${#snapshots[@]}; i++)); do
+        zfs destroy "${snapshots[i]}"
+		echo "Destroy ${snapshots[i]}"
+    done
+}
+
+function snapshot_List(){
+	id='^[0-9]+$'
+	if  [[ $# -eq 0 ]]; then
+		zfs list -H -o name -t snapshot  | "$Transform"
+
+	elif [[ $1 =~ $id ]]; then
+		zfs list -H -o name -t snapshot -r | "$Transform" "$*"
+	else
+		DATASET=$1
+		shift
+		zfs list -H -o name -t snapshot -r $DATASET | "$Transform" "$*"
+	fi
+
+}
+
+function snapshot_Delete(){
+	target=$(snapshot_List $@ |sed '1d' | awk 'NF {print $2 "@zfsbak_" $3}' )
+	for line in $target; do
+		zfs destroy $line
+		echo "Destroy $line"
+	done
+}
+
+function snapshot_Export(){
+	dataset=$1
+	id=${2:-1}
+	input=$(snapshot_List $dataset $id |sed '1d' | awk 'NF {print $2 "@zfsbak_" $3}')
+	user_home=$(getent passwd | grep $SUDO_USER | cut -d: -f6)
+	echo $user_home
+	output="${user_home}/$(echo $input |tr '/' '_').zst.aes"
+	zfs send -R "$input" | zstd -qc - | openssl aes-256-cbc -k "$ZFSBAK_PASS"  -pbkdf2 -out "$output"
+	echo Export "$input" to "~/$(echo $input |tr '/' '_').zst.aes"
+}
+
+function snapshot_Import(){
+	file=$1
+	dataset=$2
+	echo "Import $file to $dataset"
+	zstd -qcd "$file" | zfs receive "$dataset"
+}
+
+updateDate
+case "$1" in
+  -l|--list)
+    shift;snapshot_List $@
+    ;;
+  -d|--delete)
+    shift;snapshot_Delete $@
+    ;;
+  -e|--export)
+    shift;snapshot_Export $@
+    ;;
+  -i|--import)
+    shift;snapshot_Import $@
+    ;;
+  *)
+    if [ $# != 0 ]; then
+		snapshot_Create $@
+	else
+		zfsbak_Usage
+	fi
+    ;;
+esac
