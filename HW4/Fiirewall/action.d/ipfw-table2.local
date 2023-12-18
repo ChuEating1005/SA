@@ -1,0 +1,13 @@
+# Fail2Ban configuration file
+#
+# Author: Nick Munger
+# Modified by: Cyril Jaquier
+# Modified by: Kevin Lyda
+
+[Definition]
+
+actionstart =
+actionstop =
+actioncheck =
+actionban = ipfw table 2 add <ip>
+actionunban = ipfw table 2 delete <ip>

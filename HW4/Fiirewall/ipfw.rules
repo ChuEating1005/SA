@@ -1,0 +1,51 @@
+#!/bin/sh
+
+# Call initial firewall setup as per FreeBSD's standards using the "OPEN" profile
+# /bin/sh /etc/rc.firewall open
+
+# Create a Table to hold the IPs worked by fail2ban
+# The number "1" is just an ID for the table
+if ! ipfw table 1 info > /dev/null 2>&1; then
+  ipfw -q table 1 create
+  ipfw -q table 1 flush
+fi
+
+if ! ipfw table 2 info > /dev/null 2>&1; then
+  ipfw -q table 2 create
+  ipfw -q table 2 flush
+fi
+
+# Flush all current rules
+ipfw -q -f flush
+
+# create (an early) rule to deny access to the offender on the table
+ipfw -q add 00010 deny tcp from "table(1)" to any 22 in
+ipfw -q add 00020 deny tcp from "table(2)" to any 80 in
+ipfw -q add 00030 deny tcp from "table(2)" to any 443 in
+
+# Allow all traffic for loopback interface
+ipfw -q add allow all from any to any via lo0
+
+# Allow ICMP (ping) for a specific IP address
+ipfw -q add allow icmp from 10.113.94.254 to any icmptype 8
+ipfw -q add allow icmp from any to 10.113.94.254 icmptype 8
+
+# Deny ICMP (ping) requests to the server
+ipfw -q add deny icmp from any to any icmptype 8
+
+# Allow web services (HTTP/HTTPS) only from a specific subnet
+ipfw -q add allow tcp from 10.113.94.0/24 to any dst-port 80
+ipfw -q add allow tcp from 10.113.94.0/24 to any dst-port 443
+
+# HTTP/3 uses both TCP and UDP, adjust accordingly
+ipfw -q add allow tcp from 10.113.94.0/24 to any dst-port 3443
+ipfw -q add allow udp from 10.113.94.0/24 to any dst-port 3443
+
+# Set rules for SSH/Web service failed login
+# This part is typically handled by fail2ban or similar software and not directly by ipfw
+# You would need a separate process or daemon to add/remove ipfw rules based on failed login attempts
+
+# Allow all other traffic (you can tighten this up as needed)
+ipfw -q add allow ip from any to any
+
+# End of file

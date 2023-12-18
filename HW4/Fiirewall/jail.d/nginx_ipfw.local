@@ -1,0 +1,11 @@
+[DEFAULT]
+ignoreip = 127.0.0.1/8
+
+[nginx-http-auth]
+enabled = true
+mode = aggressive
+action = ipfw-table2[name=nginx-http-auth, port=http, protocol=tcp]
+logpath = /var/log/nginx/*error.log
+findtime = 300
+maxretry = 3
+bantime = 60
